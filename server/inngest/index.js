@@ -10,14 +10,32 @@ const syncUserCreation = inngest.createFunction(
   { id: "sync-user-from-clerk" },
   { event: "clerk/user.created" },
   async ({ event }) => {
-   const {id, first_name, last_name, email_addresses, image_url} = event.data
-   const userData = {
-    _id: id,
-    email: email_addresses[0].email_address,
-    name: first_name + '' + last_name,
-    image: image_url
-   }
-   await User.create(userData)
+    console.log('syncUserCreation event received:', JSON.stringify(event));
+    try {
+      // Clerk payload can be nested; try multiple places
+      const payload = event?.data?.user || event?.data?.attributes || event?.data || {};
+      const id = payload.id || payload.user_id || payload.user?.id;
+      const first_name = payload.first_name || payload.firstName || payload.name?.first;
+      const last_name = payload.last_name || payload.lastName || payload.name?.last;
+      const email_addresses = payload.email_addresses || payload.emails || (payload.email ? [{ email_address: payload.email }] : []);
+      const image_url = payload.image_url || payload.avatar_url || payload.image;
+
+      if (!id) throw new Error('No user id found in event payload: ' + JSON.stringify(payload));
+
+      const userData = {
+        _id: id,
+        email: email_addresses && email_addresses[0] ? (email_addresses[0].email_address || email_addresses[0].email) : undefined,
+        name: [first_name, last_name].filter(Boolean).join(' '),
+        image: image_url,
+      };
+
+      // Use upsert to avoid duplicate creation errors and ensure user is created/updated
+      await User.findByIdAndUpdate(id, userData, { upsert: true, new: true, setDefaultsOnInsert: true });
+      console.log('syncUserCreation success for user (upsert):', id);
+    } catch (err) {
+      console.error('syncUserCreation error:', err);
+      throw err;
+    }
   },
 );
 
@@ -27,8 +45,17 @@ const syncUserDeletion = inngest.createFunction(
   { id: "delete-user-with-clerk" },
   { event: "clerk/user.deleted" },
   async ({ event }) => {
-    const{id} = event.data
-    await User.findByIdAndDelete(id)
+    console.log('syncUserDeletion event received:', JSON.stringify(event));
+    try {
+      const payload = event?.data?.user || event?.data?.attributes || event?.data || {};
+      const id = payload.id || payload.user_id || payload.user?.id;
+      if (!id) throw new Error('No user id found in deletion payload: ' + JSON.stringify(payload));
+      await User.findByIdAndDelete(id);
+      console.log('syncUserDeletion success for user:', id);
+    } catch (err) {
+      console.error('syncUserDeletion error:', err);
+      throw err;
+    }
   },
 );
 
@@ -38,13 +65,29 @@ const syncUserUpdation = inngest.createFunction(
   { id: "update-user-from-clerk" },
   { event: "clerk/user.updated" },
   async ({ event }) => {
-    const {id, first_name, last_name, email_addresses, image_url} = event.data
-    const userData = {
-     email: email_addresses[0].email_address,
-     name: first_name + '' + last_name,
-     image: image_url
+    console.log('syncUserUpdation event received:', JSON.stringify(event));
+    try {
+      const payload = event?.data?.user || event?.data?.attributes || event?.data || {};
+      const id = payload.id || payload.user_id || payload.user?.id;
+      const first_name = payload.first_name || payload.firstName || payload.name?.first;
+      const last_name = payload.last_name || payload.lastName || payload.name?.last;
+      const email_addresses = payload.email_addresses || payload.emails || (payload.email ? [{ email_address: payload.email }] : []);
+      const image_url = payload.image_url || payload.avatar_url || payload.image;
+
+      if (!id) throw new Error('No user id found in update payload: ' + JSON.stringify(payload));
+
+      const userData = {
+        email: email_addresses && email_addresses[0] ? (email_addresses[0].email_address || email_addresses[0].email) : undefined,
+        name: [first_name, last_name].filter(Boolean).join(' '),
+        image: image_url,
+      };
+
+      await User.findByIdAndUpdate(id, userData);
+      console.log('syncUserUpdation success for user:', id);
+    } catch (err) {
+      console.error('syncUserUpdation error:', err);
+      throw err;
     }
-    await User.findByIdAndUpdate(id, userData)
   },
 );
 
