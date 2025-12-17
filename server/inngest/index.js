@@ -22,16 +22,28 @@ const syncUserCreation = inngest.createFunction(
 
       if (!id) throw new Error('No user id found in event payload: ' + JSON.stringify(payload));
 
-      const userData = {
-        _id: id,
-        email: email_addresses && email_addresses[0] ? (email_addresses[0].email_address || email_addresses[0].email) : undefined,
-        name: [first_name, last_name].filter(Boolean).join(' '),
-        image: image_url,
-      };
+      // Build an update object only with defined fields to avoid setting undefined values (which can trigger unique index errors)
+      const update = {};
+      if (email_addresses && email_addresses[0]) {
+        update.email = email_addresses[0].email_address || email_addresses[0].email;
+      }
+      const name = [first_name, last_name].filter(Boolean).join(' ').trim();
+      if (name) update.name = name;
+      if (image_url) update.image = image_url;
 
-      // Use upsert to avoid duplicate creation errors and ensure user is created/updated
-      await User.findByIdAndUpdate(id, userData, { upsert: true, new: true, setDefaultsOnInsert: true });
-      console.log('syncUserCreation success for user (upsert):', id);
+      try {
+        // Use upsert to create or update; runValidators ensures schema constraints are checked
+        await User.findByIdAndUpdate(id, update, { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true });
+        console.log('syncUserCreation success for user (upsert):', id);
+      } catch (dbErr) {
+        // Handle duplicate key errors specially for clarity
+        if (dbErr && dbErr.code === 11000) {
+          console.error('syncUserCreation duplicate key error:', dbErr.keyValue || dbErr.message);
+        } else {
+          console.error('syncUserCreation db error:', dbErr);
+        }
+        throw dbErr;
+      }
     } catch (err) {
       console.error('syncUserCreation error:', err);
       throw err;
