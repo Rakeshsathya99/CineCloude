@@ -2,6 +2,7 @@ import { Inngest } from "inngest";
 import User from "../models/User.js";
 import Booking from "../models/Booking.js";
 import Show from "../models/show.js";
+import Movie from "../models/movie.js";
 import sendEmail from "../configs/nodeMailer.js";
 
 // Create a client to send and receive events
@@ -144,8 +145,8 @@ const sendBookingConfirmationEmail = inngest.createFunction(
     const { bookingId } = event.data;
     const booking = await Booking.findById(bookingId).populate('user').populate({
       path: 'show',
-      populate: {path: 'movie', model:'model'}
-    }).populate('user')
+      populate: {path: 'movie', model:'Movie'}
+    })
     
     await sendEmail({
         to: booking.user.email,
