@@ -92,6 +92,15 @@ export const createBooking = async (req, res) => {
     booking.paymentLink = session.url
     await booking.save();
 
+    // Run ingest fuction sheduler function to check paymnet status afetr 10 minutes
+
+    await inngest.sendEvent({
+      name: "app/checkpayment",
+      data: {
+        bookingId: booking._id.toString(),
+      },
+    });
+
     return res.json({ success: true, message: 'Ticket Booked Successfully', booking, url: session.url });
   } catch (error) {
     console.log('createBooking error:', error.message || error);
