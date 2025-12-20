@@ -122,7 +122,7 @@ const releaseSeatsAndDeleteBooking = inngest.createFunction(
 
       if(!booking.isPaid){
         const show = await Show.findById(booking.show);
-        booking.bookedSeats.forEach(() =>{
+        booking.bookedSeats.forEach((seat) =>{
           delete show.occupiedSeats[seat];
         });
         show.markModified('occupiedSeats');
@@ -138,4 +138,4 @@ export const functions = [
     syncUserCreation, 
     syncUserDeletion, 
     syncUserUpdation,
-    releaseSeatsndDeleteBooking];
+    releaseSeatsAndDeleteBooking];

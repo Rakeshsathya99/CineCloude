@@ -1,6 +1,7 @@
 import Booking from '../models/Booking.js';
 import Show from '../models/show.js';
 import Stripe from 'stripe'
+import { inngest } from '../inngest/index.js';
 
 // function to check availability of seats for the movie
 
