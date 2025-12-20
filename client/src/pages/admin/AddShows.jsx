@@ -1,11 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { dummyShowsData } from "../../assets/assets";
+import React, { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import Title from "../../components/admin/Title";
 import { CheckIcon, DeleteIcon, StarIcon } from "lucide-react";
 import { Kconverter } from "../../lib/KConverter";
+import { useAppContext } from "../../context/AppContextCore";
+import toast from "react-hot-toast";
+
 
 const AddShows = () => {
+
+  const { axios, getToken, user, image_base_url } = useAppContext();
+
   const currency = import.meta.env.VITE_CURRENCY;
 
   const [nowPlayingMovies, setNowPlayingMovies] = useState([]);
@@ -13,10 +18,23 @@ const AddShows = () => {
   const [dateTimeSelection, setDateTimeSelection] = useState({});
   const [dateTimeInput, setDateTimeInput] = useState("");
   const [showPrice, setShowPrice] = useState("");
+  const [addingShow, setAddingShow] = useState(false);
 
-  const fetchNowPlayingMovies = async () => {
-    setNowPlayingMovies(dummyShowsData);
-  };
+
+  const fetchNowPlayingMovies = useCallback(async () => {
+    try {
+      const { data } = await axios.get('/api/show/now-playing', {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      });
+      if (data?.success) {
+        setNowPlayingMovies(data.movies || []);
+      } else {
+        console.error('Now playing API responded with error:', data?.message);
+      }
+    } catch (error) {
+      console.log('Error Fetching Now Playing Movies:', error);
+    }
+  }, [axios, getToken]);
 
   const handleDateTimeAdd = () => {
     if (!dateTimeInput) return;
@@ -47,9 +65,47 @@ const AddShows = () => {
       };
     });
   };
+
+  const handelSubmit = async () => {
+    try {
+      setAddingShow(true);
+      if(!selectedMovie || Object.keys(dateTimeSelection).length === 0 || !showPrice){
+        setAddingShow(false);
+        return toast.error("Please fill all the fields");
+      }
+
+      const showsInput = Object.entries(dateTimeSelection).map(([date, times]) => ({ date, times }));
+
+      const payload = {
+        movieId: selectedMovie,
+        showsInput,
+        showPrice: Number(showPrice),
+      }
+
+      const { data } = await axios.post('/api/show/add', payload, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      });
+
+      if(data.success){
+        toast.success(data.message);
+        setSelectedMovie(null);
+        setDateTimeSelection({});
+        setShowPrice("");
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.error("Error adding show:", error);
+      toast.error("An error occurred while adding the show.");
+    }
+    setAddingShow(false);
+  }
+
   useEffect(() => {
-    fetchNowPlayingMovies();
-  }, []);
+    if(user){
+      fetchNowPlayingMovies();
+    }
+  }, [user]);
 
   return nowPlayingMovies.length > 0 ? (
     <>
@@ -67,7 +123,7 @@ const AddShows = () => {
             >
               <div className="relative rounded-lg overflow-hidden">
                 <img
-                  src={movie.poster_path}
+                  src={image_base_url + movie.poster_path}
                   alt={movie.title}
                   className="w-full h-auto object-cover brightness-90"
                 />
@@ -172,7 +228,7 @@ cursor-pointer"
           </ul>
         </div>
       )}
-      <button className='bg-primary text-white px-6 py-3 mt-10 rounded hover:bg-primary/90 transition-all cursor-pointer'>
+      <button onClick={handelSubmit} disabled ={addingShow} className='bg-primary text-white px-6 py-3 mt-10 rounded hover:bg-primary/90 transition-all cursor-pointer'>
       Add Show
       </button>
     </>

@@ -14,10 +14,15 @@ import Dashbord from './pages/admin/Dashbord'
 import AddShows from './pages/admin/AddShows'
 import ListShows from './pages/admin/ListShows'
 import ListBookings from './pages/admin/ListBookings'
+import { SignIn, useUser } from '@clerk/clerk-react'
+import Loading from './components/Loading'
 
 const App = () => {
 
   const isAdminRoute =useLocation().pathname.startsWith('/admin')
+
+  const { user } = useUser();
+
   return (
     <>
     <Toaster/>
@@ -29,7 +34,12 @@ const App = () => {
         <Route path='/movies/:id/:date' element = {<SeatLayout/>}/>
         <Route path='/favorite' element = {<Favorite/>}/>
         <Route path='/my-bookings' element = {<MovieBookings/>}/>
-        <Route path='/admin/*' element = {<Layout/>}>
+        <Route path='/loading/:nextUrl' element = {<Loading/>}/>
+        <Route path='/admin/*' element = { user ?<Layout/>: (
+          <div className='min-h-small flex justify-center items-center'>
+            <SignIn fallbackRedirectUrl={ '/admin'}/>
+          </div>
+        )}>
           <Route index element= {<Dashbord/>}/>
           <Route path='add-shows' element= {<AddShows/>}/>
           <Route path='list-shows' element= {<ListShows/>}/>

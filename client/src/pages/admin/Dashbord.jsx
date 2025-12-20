@@ -6,13 +6,17 @@ import {
   UserIcon,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { dummyDashboardData } from "../../assets/assets";
 import Title from "../../components/admin/Title";
 import Loading from "../../components/Loading";
 import BlurCircle from "../../components/BlurCircle";
 import { dateFormat } from "../../lib/dateFormat";
+import { useAppContext } from "../../context/AppContextCore";
+import toast from "react-hot-toast";
 
 const Dashbord = () => {
+
+  const { axios, getToken, user, image_base_url } = useAppContext();
+
   const currency = import.meta.env.VITE_CURRENCY;
 
   const [dashbordData, setDashbordData] = useState({
@@ -48,13 +52,27 @@ const Dashbord = () => {
   ];
 
   const fecthDashbordData = async () => {
-    setDashbordData(dummyDashboardData);
-    setLoading(false);
+    try {
+      const { data } = await axios.get('/api/admin/dashboard-users', {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      });
+      if(data.success){
+        setDashbordData(data.dashboardData);
+      } else {
+        toast.error(data.message || 'Failed to fetch dashboard data');
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to fetch dashboard data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fecthDashbordData();
-  }, []);
+    if(user){
+      fecthDashbordData();
+    }
+  }, [user]);
 
   return !loading ? (
     <>
@@ -90,9 +108,9 @@ const Dashbord = () => {
                 hover:-translate-y-1 transition duration-300"
             >
               <img
-                src={show.movie.poster_path}
-                alt=""
-                className="h-60w-full object-cover"
+                src={image_base_url + show.movie.poster_path}
+                alt={show.movie.title || 'poster'}
+                className="h-60 w-full object-cover"
               />
               <p className="font-medium p-2 truncate">{show.movie.title}</p>
               <div className="flex items-center justify-between px-2">
@@ -105,10 +123,10 @@ const Dashbord = () => {
                   <StarIcon
                     className="w-4 h-4 text-primary fill-primary"
                   />
-                  {show.movie.vote_average.toFixed(1)}
+                  {show.movie.vote_average?.toFixed(1)}
                 </p>
               </div>
-              <p className="px- pt-2 text-sm text-gray -500">{dateFormat(show.showDateTime)}</p>
+              <p className="px-2 pt-2 text-sm text-gray-500">{dateFormat(show.showDateTime)}</p>
             </div>
           ))}
         </div>

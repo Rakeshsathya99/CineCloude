@@ -15,7 +15,7 @@ const TrailerSection = () => {
         <ReactPlayer
           url={currentTrailer.videoUrl}
           controls={true}
-          playing={true}
+          playing={false}
           width="960px"
           height="540px"
           className="mx-auto max-w-full"

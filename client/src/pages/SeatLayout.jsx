@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { assets, dummyDateTimeData, dummyShowsData } from "../assets/assets";
+import { useParams } from "react-router-dom";
+import { assets } from "../assets/assets";
 import Loading from "../components/Loading";
 import { ArrowRightIcon, ClockIcon } from "lucide-react";
 import isoTimeFormat from "../lib/isoTimeFormat";
 import BlurCircle from "../components/BlurCircle";
 import toast from "react-hot-toast";
+import { useAppContext } from "../context/AppContextCore";
 
 const SeatLayout = () => {
   const groupRows = [
@@ -20,25 +21,41 @@ const SeatLayout = () => {
   const [selectedSeats, setSlectedSeats] = useState([]);
   const [selectedTime, setSlectedTime] = useState(null);
   const [show, setShow] = useState(null);
+  const [occupiedSeats, setOccupiedSeats] = useState([]);
 
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
+
+  const { axios, getToken, user } = useAppContext();
 
   const getShow = async () => {
-    const show = dummyShowsData.find((show) => show._id === id);
-    if (show) {
-      setShow({
-        movie: show,
-        dateTime: dummyDateTimeData,
+    try {
+      const { data } = await axios.get(`/api/show/${id}`, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
       });
+      console.log('getShow response:', data);
+      if (data.success) {
+        setShow(data);
+      } else {
+        toast.error(data.message || 'Failed to load show');
+      }
+    } catch (error) {
+      console.error('getShow error:', error);
+      toast.error(error.message || 'Failed to load show');
     }
-  };
+  }
 
-  const handelSeatClick = (seatId) => {
+  const handelSeatClick = (seatId, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    console.log('Seat clicked:', seatId);
     if (!selectedTime) {
       return toast("Please Select time first");
     }
-    if (!selectedSeats.includes(seatId) && selectedSeats.includes.length > 4) {
+    if (!selectedSeats.includes(seatId) && selectedSeats.length >= 5) {
       return toast("You can only Select 5 Seats");
+    }
+    if (occupiedSeats.includes(seatId)) {
+      return toast.error('Seat already occupied, please select another seat');
     }
     setSlectedSeats((prev) =>
       prev.includes(seatId)
@@ -56,9 +73,11 @@ const SeatLayout = () => {
             return (
               <button
                 key={seatId}
-                onClick={() => handelSeatClick(seatId)}
+                onClick={(e) => handelSeatClick(seatId, e)}
+                disabled={occupiedSeats.includes(seatId)}
+                title={occupiedSeats.includes(seatId) ? 'Occupied' : seatId}
                 className={`h-8 w-8 rounded border border-primary/60
-                  cursor-pointer ${
+                  ${occupiedSeats.includes(seatId) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
                     selectedSeats.includes(seatId) && "bg-primary text-white"
                   }`}
               >
@@ -71,9 +90,74 @@ const SeatLayout = () => {
     );
   };
 
+    const getOccupiedSeats = async () => {
+    try {
+      if (!selectedTime || !selectedTime.showId) {
+      setOccupiedSeats([]);
+      return;
+    }
+
+    try {
+      const { data } = await axios.get(`/api/booking/seats/${selectedTime.showId}`, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      });
+      if (data.success) {
+        setOccupiedSeats(data.occupiedSeats || []);
+      } else {
+        toast.error(data.message || 'Failed to fetch occupied seats');
+        setOccupiedSeats([]);
+      }
+    } catch (error) {
+      console.error('getOccupiedSeats error:', error);
+      toast.error(error.message || 'Failed to fetch occupied seats');
+      setOccupiedSeats([]);
+    }
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  const bookTickets = async () => {
+    try {
+      if(!user){
+        return toast.error('Please login to proceed');
+      }
+      if(!selectedTime || !selectedSeats.length){
+        return toast.error('Please select show time and seats');
+      }
+
+      console.log('selectedTime:', selectedTime);
+      console.log('selectedTime.showId:', selectedTime.showId);
+      console.log('selectedSeats:', selectedSeats);
+
+      if(!selectedTime.showId) {
+        return toast.error('Show ID not found. Please refresh and try again.');
+      }
+
+      const { data } = await axios.post('/api/booking/create', { showId: selectedTime.showId, selectedSeats },
+        { headers: { Authorization: `Bearer ${await getToken()}` } }
+      );
+      console.log('bookTickets response:', data);
+      if (data.success) {
+        window.location.href = data.url;
+      } else {
+        toast.error(data.message || 'Failed to book tickets');
+      }
+    } catch (error) {
+      console.error('bookTickets error:', error);
+      toast.error(error.response?.data?.message || error.message || "An error occurred while booking tickets");
+    }
+  }
+
   useEffect(() => {
     getShow();
   }, [id]);
+
+  useEffect(() => {
+    if(selectedTime){
+      getOccupiedSeats()
+    }
+  }, [selectedTime])
 
   return show ? (
     <div
@@ -128,11 +212,11 @@ const SeatLayout = () => {
           </div>
         </div>
         <button
-          onClick={() => navigate("/my-bookings")}
-          className="flex 
-          items-center gap-1 mt-20 px-10 py-3 text-sm bg-primary
-          hover:bg-primary-dull transition rounded-full font-medium cursor-pointer
-          activate: scale-95"
+          onClick={bookTickets}
+          disabled={!selectedTime || selectedSeats.length === 0}
+          className={`flex 
+          items-center gap-1 mt-20 px-10 py-3 text-sm rounded-full font-medium ${!selectedTime || selectedSeats.length === 0 ? 'bg-gray-600 cursor-not-allowed' : 'bg-primary hover:bg-primary-dull transition cursor-pointer'}
+          active:scale-95`}
         >
           Proceed to Checkout
           <ArrowRightIcon strokeWidth={3} className="w-4 h-4" />
