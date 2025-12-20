@@ -95,7 +95,7 @@ export const createBooking = async (req, res) => {
 
     // Run ingest fuction sheduler function to check paymnet status afetr 10 minutes
 
-    await inngest.sendEvent({
+    await inngest.send({
       name: "app/checkpayment",
       data: {
         bookingId: booking._id.toString(),
