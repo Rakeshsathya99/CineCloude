@@ -10,6 +10,7 @@ import boookingRoutes from './routes/bookingRoutes.js';
 import adminRouter from './routes/adminroutes.js';
 import userRouter from './routes/userRoutes.js';
 import { stripeWebhooks } from './controllers/stripeWebhooks.js';
+import 'dotenv/config';
 
 
 const app = express();
