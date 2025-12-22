@@ -12,6 +12,7 @@ const ListBookings = () => {
 
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [filterDate, setFilterDate] = useState("");
 
   const getAllBookings = async () => {
     try {
@@ -36,9 +37,28 @@ const ListBookings = () => {
     }
   }, [user]);
 
+  const filteredBookings = bookings.filter((item) => {
+    if (!filterDate) return true;
+    const itemDate = new Date(item.show.showDateTime).toISOString().split("T")[0];
+    return itemDate === filterDate;
+  });
+
+  const totalAmount = filteredBookings.reduce((sum, item) => sum + item.amount, 0);
+
   return !isLoading ? (
     <>
       <Title textl="List" text2="Bookings" />
+
+      <div className="flex flex-wrap justify-between items-center my-6 gap-4">
+        <div className="flex items-center gap-3">
+          <p className="text-gray-400">Filter by Date:</p>
+          <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="bg-gray-800 text-white border border-gray-600 rounded px-3 py-1 outline-none" />
+        </div>
+        <p className="text-lg font-medium">
+          Total Earnings: <span className="text-primary">{currency} {totalAmount}</span>
+        </p>
+      </div>
+
       <div className="max-w-4xl mt-6 overflow-x-auto">
         <table
           className="w-full border-collapse rounded-md overflow-hidden
@@ -54,7 +74,7 @@ text-nowrap"
             </tr>
           </thead>
           <tbody className="text-sm font-light">
-            {bookings.map((item, index) => (
+            {filteredBookings.map((item, index) => (
               <tr
                 key={index}
                 className="border-b border-primary/20
