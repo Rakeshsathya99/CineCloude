@@ -122,9 +122,9 @@ const releaseSeatsAndDeleteBooking = inngest.createFunction(
 
       //if the payment is not made, release seats and delete booking
 
-      if(!booking.isPaid){
+      if (!booking.isPaid) {
         const show = await Show.findById(booking.show);
-        booking.bookedSeats.forEach((seat) =>{
+        booking.bookedSeats.forEach((seat) => {
           delete show.occupiedSeats[seat];
         });
         show.markModified('occupiedSeats');
@@ -143,19 +143,19 @@ const sendBookingConfirmationEmail = inngest.createFunction(
   { event: "app/show.booked" },
   async ({ event, step }) => {
     const { bookingId } = event.data;
-    
+
     const booking = await step.run("fetch-booking-details", async () => {
       return await Booking.findById(bookingId).populate('user').populate({
         path: 'show',
-        populate: {path: 'movie', model:'Movie'}
+        populate: { path: 'movie', model: 'Movie' }
       })
     })
-    
+
     await step.run("send-confirmation-email", async () => {
       await sendEmail({
-          to: booking.user.email,
-          subject: `Ticket Booking Confirmation:"${booking.show.movie.title}" booked!`,
-          body:`<div style="font-family: Arial, sans-serif; line-height: 1.5;">
+        to: booking.user.email,
+        subject: `Ticket Booking Confirmation:"${booking.show.movie.title}" booked!`,
+        body: `<div style="font-family: Arial, sans-serif; line-height: 1.5;">
                   <h2>Hi ${booking.user.name},</h2>
                 <p>Your booking for <strong style="color: #F84565;">"${booking.show.movie.title}"</strong> is confirmed.</p>
                 <p>
@@ -163,18 +163,161 @@ const sendBookingConfirmationEmail = inngest.createFunction(
                     <strong>Time:</strong> ${new Date(booking.show.showDateTime).toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata' })}
                 </p>
                 <p>Enjoy the show!🍿 </p>
-                <p>Thanks for booking with us! <br/>- QuickShow Team</p>
+                <p>Thanks for booking with us! <br/> Cine-Cloud Team</p>
                   </div>`
       })
     })
   }
 )
+
+// ingest function to send email to remind user about upcoming shows
+
+const sendShowReminderEmail = inngest.createFunction(
+  { id: "send-show-reminder-email" },
+  { cron: "0 */8 * * *" },// Every 8 hours
+  async ({ step }) => {
+    const now = new Date();
+    const in8Hours = new Date(now.getTime() + 8 * 60 * 60 * 1000); // Add 8 hours to current time
+    const windowStart = new Date(in8Hours.getTime() - 10 * 60 * 1000); // Subtract 10 minutes from the end of the window
+    // const windowEnd = new Date(in8Hours.getTime()); // End of the window
+
+    // prepare to 
+    const remainderTask = await step.run("Prepare-Reminder-Task", async () => {
+      const shows = await Show.find({
+        showTime: { $gte: windowStart, $lte: in8Hours },
+      }).populate('movie');
+
+      const tasks = [];
+
+      for (const show of shows) {
+        if (!show.movie || !show.occupiedSeats) continue;
+
+        const userId = [...new Set(Object.values(show.occupiedSeats))];
+        if (userId.length === 0) continue;
+
+        const users = await User.find({ _id: { $in: userId } }).select("name email")
+
+        for (const user of users) {
+          tasks.push({
+            userEmail: user.email,
+            userName: user.name,
+            movieTitle: show.movie.title,
+            showTime: show.showTime
+          })
+        }
+      }
+      return tasks;
+    })
+
+    if (remainderTask.length === 0) {
+      return { sent: 0, message: "No remainder to send " }
+    }
+
+    // send remiander email
+
+    const results = await step.run('send-all-reminder', async () => {
+      return await Promise.allSettled(
+        remainderTask.map(task => sendEmail({
+          to: task.userEmail,
+          subject: `Remainder: your movie "${task.movieTitle}" starts Soon!`,
+          body: `<div style="font-family: Arial, sans-serif; padding: 24px; background-color: #f9fafb; color: #111827;">
+  
+  <div style="max-width: 600px; margin: auto; background: #ffffff; border-radius: 10px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
     
+    <h2 style="margin-top: 0; color: #111827;">
+      🎬 Hello ${task.userName},
+    </h2>
+
+    <p style="font-size: 15px; line-height: 1.6; color: #374151;">
+      This is a friendly reminder that your movie booking is coming up soon.
+    </p>
+
+    <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+      <p style="margin: 0; font-size: 14px; color: #6b7280;">Movie</p>
+      <h3 style="margin: 6px 0 12px; color: #F84565;">
+        ${task.movieTitle}
+      </h3>
+
+      <p style="margin: 0; font-size: 14px; color: #6b7280;">Show Time</p>
+      <p style="margin: 6px 0 0; font-size: 15px; color: #111827;">
+        📅 <strong>
+          ${new Date(task.showTime).toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata' })}
+        </strong><br/>
+        ⏰ <strong>
+          ${new Date(task.showTime).toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata' })}
+        </strong>
+      </p>
+    </div>
+
+    <p style="font-size: 15px; color: #374151;">
+      ⏳ Your show starts in approximately <strong>8 hours</strong>.
+      Make sure you reach the theatre on time and enjoy the experience!
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+
+    <p style="font-size: 14px; color: #6b7280; text-align: center;">
+      Enjoy the show 🍿<br/>
+      <strong>Cine-Cloud Team</strong>
+    </p>
+
+  </div>
+    </div>`
+        })
+        ))
+    })
+
+    const sent = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.length - sent;
+
+    return {
+      sent,
+      failed,
+      message: `Sent ${sent} emails, failed to send ${failed}.}`
+    }
+  }
+)
+
+const sendNewShowsNotifications = inngest.createFunction(
+  { id: "send-new-show-notifications" },
+  { event: "app/new-show-added" },// Every 8 hours
+  async ({ event }) => {
+    const {movieTitle, movieId} = event.data;
+
+    const users = await User.find({})
+
+      for (const user of users){
+        const userEmail = user.email;
+        const userName= user.name;
+
+        const subject = `new Show Added : ${movieTitle}`;
+        const body = `<div style= 'font-family: Arial, sans-serif; padding: 24px'>
+        <h2>Hi ${userName},</h2>
+        <p> We've just added a new show to our library:</p>
+        <p> Visit our website</p>
+        <br/>
+        <p>Thanks. <br/> Cine-Cloud Team </p>
+        </div>`;
+
+        
+        await sendEmail({
+        to: userEmail,
+        subject,
+        body
+      })
+      }
+      return {message:'notification sent'}
+  }
+)
+
 
 // Create an empty array where we'll export future Inngest functions
 export const functions = [
-    syncUserCreation, 
-    syncUserDeletion, 
-    syncUserUpdation,
-    releaseSeatsAndDeleteBooking,
-    sendBookingConfirmationEmail];
+  syncUserCreation,
+  syncUserDeletion,
+  syncUserUpdation,
+  releaseSeatsAndDeleteBooking,
+  sendBookingConfirmationEmail,
+  sendShowReminderEmail,
+  sendNewShowsNotifications,
+];
