@@ -77,7 +77,7 @@ export const createBooking = async (req, res) => {
       quantity: 1
     }]
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL;
     
     const session = await stripeInstance.checkout.sessions.create({
       success_url: `${frontendUrl}/my-bookings`,

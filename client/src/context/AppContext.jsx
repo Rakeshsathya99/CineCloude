@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { AppContext } from './AppContextCore.jsx';
 
 // Ensure VITE_API_BASE_URL (if set) does NOT include a trailing `/api` — server routes expect `/api/*` paths.
-axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL;
 
 export const AppProvider = ({ children }) => {
 
