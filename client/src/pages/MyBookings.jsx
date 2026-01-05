@@ -24,7 +24,7 @@ const MyBookings = () => {
         return;
       }
       setLoading(true);
-      const { data } = await axios.get('/api/booking/user', {
+      const { data } = await axios.get('/api/booking/my-bookings', {
         headers: { Authorization: `Bearer ${await getToken()}` }
       });
       console.log('getMyBookings response:', data);
