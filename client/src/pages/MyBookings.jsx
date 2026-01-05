@@ -18,14 +18,15 @@ const MyBookings = () => {
 
   const getMyBookings = async () => {
     try {
-      if (!user) {
+      const token = await getToken();
+      if (!user || !token) {
         setBookings([]);
         setLoading(false);
         return;
       }
       setLoading(true);
-      const { data } = await axios.get('/api/booking/my-bookings', {
-        headers: { Authorization: `Bearer ${await getToken()}` }
+      const { data } = await axios.get('/api/booking/user', {
+        headers: { Authorization: `Bearer ${token}` }
       });
       console.log('getMyBookings response:', data);
       if (data.success) {
@@ -42,17 +43,11 @@ const MyBookings = () => {
   };
 
   useEffect(() => {
-    if (user) {
+    // Fetch if user exists, or if we just came from a successful booking
+    if (user || location.state?.booked) {
       getMyBookings();
     }
-  }, [user]);
-
-  // If navigated to with { state: { booked: true } } (immediately after booking), refetch to reflect new booking
-  useEffect(() => {
-    if (location.state?.booked && user) {
-      getMyBookings();
-    }
-  }, [location.state, user]);
+  }, [user, location.state]);
 
   return !isLoading ? (
     <div className="relative px-6 md:px-16 lg:px-40 pt-30 md:pt-40 min-h-[80vh]">
